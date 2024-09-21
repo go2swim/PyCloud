@@ -9,7 +9,9 @@ import os
 
 class TestGoogleDrive(unittest.TestCase):
 
-    @patch("src.Drive.google_drive.GoogleDrive.check_upload", return_value="test_folder_id")
+    @patch(
+        "src.Drive.google_drive.GoogleDrive.check_upload", return_value="test_folder_id"
+    )
     @patch("src.Drive.google_drive.get_service")
     def setUp(self, mock_build, _):
         self.mock_service = MagicMock()
@@ -30,7 +32,7 @@ class TestGoogleDrive(unittest.TestCase):
         self.assertEqual(self.drive.folder_id, "test_folder_id")
 
     def test_check_upload_folder_exists(self):
-        # Мок ответа API Google Drive при запросе существующих папок
+
         mock_files_list = self.mock_service.files().list
         mock_files_list.return_value.execute.return_value = {
             "files": [
@@ -50,11 +52,10 @@ class TestGoogleDrive(unittest.TestCase):
         mock_files_create = self.mock_service.files().create
 
         mock_files_list.return_value.execute.side_effect = [
-            {"files": []},  # Сначала нет корневой папки
-            {"files": []},  # Нет папок в созданной корневой папке
+            {"files": []},
+            {"files": []},
         ]
 
-        # mock_files_create.return_value.execute.return_value = {'id': 'new_root_folder_id'}
         mock_folder_upload.return_value = {self.drive.dir_name: "123"}
 
         folder_id = self.drive.check_upload()
@@ -182,9 +183,9 @@ class TestGoogleDrive(unittest.TestCase):
 
         mock_files_create = self.mock_service.files().create
         mock_files_create.return_value.execute.side_effect = [
-            {"id": "new_folder_id"},  # Для создания папки
-            {"id": "file1_id"},  # Для загрузки file1.txt
-            {"id": "file2_id"},  # Для загрузки file2.txt
+            {"id": "new_folder_id"},
+            {"id": "file1_id"},
+            {"id": "file2_id"},
         ]
 
         upload_folders = ["root_folder\\test_folder"]
@@ -222,7 +223,7 @@ class TestGoogleDrive(unittest.TestCase):
     @patch("src.Drive.google_drive.open", create=True)
     @patch("src.Drive.google_drive.hashlib.md5")
     def test_get_data_for_comparison(self, mock_md5, mock_open, mock_getmtime):
-        mock_getmtime.return_value = 1609459200  # 1 января 2024
+        mock_getmtime.return_value = 1609459200
 
         mock_file = MagicMock()
         mock_file.read.return_value = b"test_file_content"
@@ -292,10 +293,10 @@ class TestGoogleDrive(unittest.TestCase):
         )
 
         mock_get_data_for_comparison.return_value = (
-            datetime.datetime(2023, 1, 1, 12, 0),  # Локальное время модификации
-            datetime.datetime(2022, 12, 31, 10, 0),  # Время модификации в облаке
-            "d41d8cd98f00b204e9800998ecf8427e",  # Локальная контрольная сумма
-            "d41d8cd98f00b204e9800998ecf8427e",  # Контрольная сумма в облаке
+            datetime.datetime(2023, 1, 1, 12, 0),
+            datetime.datetime(2022, 12, 31, 10, 0),
+            "d41d8cd98f00b204e9800998ecf8427e",
+            "d41d8cd98f00b204e9800998ecf8427e",
         )
 
         self.drive.parents_id = {
@@ -430,7 +431,6 @@ class TestGoogleDrive(unittest.TestCase):
             pageSize=20, q="'sub_folder2_id' in parents"
         )
 
-        # Проверка, что метод загрузки файлов был вызван 4 раза (по 2 файла на каждую папку)
         self.assertEqual(mock_download_file.call_count, 4)
 
     @patch("src.Drive.google_drive.os.makedirs")
@@ -480,7 +480,7 @@ class TestGoogleDrive(unittest.TestCase):
         mock_downloader.return_value.next_chunk.side_effect = [
             (None, False),
             (None, True),
-        ]  # Два вызова для завершения загрузки
+        ]
 
         self.drive.download_file_from_drive("\\test\\path", drive_file)
 
@@ -493,7 +493,9 @@ class TestGoogleDrive(unittest.TestCase):
 
     @patch("src.clouds_manager.get_os_path_by_cloud_path")
     @patch("src.Drive.google_drive.os.remove")
-    @patch("src.Drive.google_drive.os.path.join", side_effect=lambda *args: "/".join(args))
+    @patch(
+        "src.Drive.google_drive.os.path.join", side_effect=lambda *args: "/".join(args)
+    )
     @patch("src.Drive.google_drive.GoogleDrive.get_data_for_comparison")
     @patch("src.Drive.google_drive.GoogleDrive.download_file_from_drive")
     def test_update_dir_on_pc(
@@ -541,13 +543,13 @@ class TestGoogleDrive(unittest.TestCase):
                 datetime.datetime(2024, 1, 1),
                 "local_md5_file1",
                 "cloud_md5_file1",
-            ),  # file1.txt
+            ),
             (
                 datetime.datetime(2021, 1, 1),
                 datetime.datetime(2021, 1, 1),
                 "local_md5_file2",
                 "cloud_md5_file2",
-            ),  # file2.txt
+            ),
         ]
 
         self.drive.update_dir_on_pc(exact_folders)

@@ -14,7 +14,9 @@ from src.clouds_manager import (
 
 
 class TestWorkThisCloud(unittest.TestCase):
-    @patch("builtins.open", new_callable=mock_open, read_data="D:/folder1\nD:/folder2\n")
+    @patch(
+        "builtins.open", new_callable=mock_open, read_data="D:/folder1\nD:/folder2\n"
+    )
     def test_save_sync_folders_existing_path(self, mock_file):
         save_sync_folders("D:/folder1")
         mock_file.assert_called_once_with(SAVE_SYNC_FILE, "r")
@@ -50,16 +52,16 @@ class TestWorkThisCloud(unittest.TestCase):
     ):
         mock_get_and_update_sync_folders.return_value = ["D:/folder1", "D:/folder2"]
         mock_get_os_tree.side_effect = [
-            ["subfolder1", "subfolder2"],  # For D:/folder1
-            ["subfolderA", "subfolderB"],  # For D:/folder2
+            ["subfolder1", "subfolder2"],
+            ["subfolderA", "subfolderB"],
         ]
 
         mock_cloud_instance = MagicMock()
 
         mock_clouds.values.return_value = [lambda folder_full_path: mock_cloud_instance]
         mock_cloud_instance.get_cloud_tree.side_effect = [
-            ["subfolder1", "subfolder3"],  # For D:/folder1
-            ["subfolderA"],  # For D:/folder2
+            ["subfolder1", "subfolder3"],
+            ["subfolderA"],
         ]
 
         with patch(
@@ -103,8 +105,8 @@ class TestWorkThisCloud(unittest.TestCase):
         mock_get_os_tree.return_value = ["subfolder1", "subfolder2"]
         mock_get_os_path_by_cloud_path.return_value = "D:/folder1/subfolder2"
 
-        tree_list = ["subfolder1", "subfolder3"]  # Данные с облака
-        os_tree_list = ["subfolder1", "subfolder2"]  # Данные с локального диска
+        tree_list = ["subfolder1", "subfolder3"]
+        os_tree_list = ["subfolder1", "subfolder2"]
 
         mock_cloud_instance.get_cloud_tree.side_effect = (
             lambda root, tree_list_arg, _: tree_list_arg.extend(tree_list)
@@ -114,12 +116,8 @@ class TestWorkThisCloud(unittest.TestCase):
 
         mock_cloud_instance.check_root_folder.assert_called_once()
         mock_cloud_instance.get_cloud_tree.assert_called_once()
-        mock_cloud_instance.downloading_folders.assert_called_once_with(
-            ["subfolder3"]
-        )  # На облаке, но нет на ПК
-        mock_cloud_instance.update_dir_on_pc.assert_called_once_with(
-            ["subfolder1"]
-        )  # Синхронизация папок, которые есть и там, и там
+        mock_cloud_instance.downloading_folders.assert_called_once_with(["subfolder3"])
+        mock_cloud_instance.update_dir_on_pc.assert_called_once_with(["subfolder1"])
 
         mock_rmtree.assert_any_call("D:/folder1/subfolder2")
         mock_get_os_path_by_cloud_path.assert_any_call("subfolder2")
@@ -164,12 +162,13 @@ class TestWorkThisCloud(unittest.TestCase):
 
         self.assertEqual(result, expected_result)
         mock_get_and_update_sync_folders.assert_called_once()
-        mock_get_valid_folder_path.assert_not_called()  # Не вызывается, так как путь найден
+        mock_get_valid_folder_path.assert_not_called()
 
         clouds_path_not_found = "SYNC_FOLDERS\\folder3"
         result_not_found = get_os_path_by_cloud_path(clouds_path_not_found)
         self.assertEqual(result_not_found, "D:/folder3")
         mock_get_valid_folder_path.assert_called_once_with("folder3")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -23,14 +23,14 @@ class YandexHeadersManager:
 class YandexTokenManager:
     def __init__(self):
         current_dir = os.path.basename(os.getcwd())
-        if current_dir == 'PyCloud':
-            token_file = os.path.join('src', 'Yandex', 'access_token_for_yandex')
-        elif current_dir == 'src':
-            token_file = os.path.join('Yandex', 'access_token_for_yandex')
-        elif current_dir == 'Yandex':
-            token_file = 'access_token_for_yandex'
-        elif current_dir == 'Tests':
-            token_file = os.path.join('..', 'Yandex', 'access_token_for_yandex')
+        if current_dir == "PyCloud":
+            token_file = os.path.join("src", "Yandex", "access_token_for_yandex")
+        elif current_dir == "src":
+            token_file = os.path.join("Yandex", "access_token_for_yandex")
+        elif current_dir == "Yandex":
+            token_file = "access_token_for_yandex"
+        elif current_dir == "Tests":
+            token_file = os.path.join("..", "Yandex", "access_token_for_yandex")
         else:
             raise FileNotFoundError("Is start directory not found")
 
@@ -46,7 +46,7 @@ class YandexTokenManager:
         Получить access token из файла или обновить его через refresh token.
         """
         try:
-            with open(self.token_file, 'r') as file:
+            with open(self.token_file, "r") as file:
                 token = file.read().strip()
                 if token:
                     return token
@@ -60,7 +60,7 @@ class YandexTokenManager:
         Процедура получения токена (через авторизацию пользователя).
         """
         token = self.authentication()
-        with open(self.token_file, 'w') as file:
+        with open(self.token_file, "w") as file:
             file.write(token)
         return token
 
@@ -69,9 +69,16 @@ class YandexTokenManager:
         Основной процесс аутентификации: получение кода и обмен на токен.
         """
         # 1. Генерация code_verifier и code_challenge для PKCE
-        code_verifier = base64.urlsafe_b64encode(os.urandom(32)).rstrip(b'=').decode('utf-8')
-        code_challenge = base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode('utf-8')).digest()).rstrip(
-            b'=').decode('utf-8')
+        code_verifier = (
+            base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=").decode("utf-8")
+        )
+        code_challenge = (
+            base64.urlsafe_b64encode(
+                hashlib.sha256(code_verifier.encode("utf-8")).digest()
+            )
+            .rstrip(b"=")
+            .decode("utf-8")
+        )
 
         # 2. Ссылка для авторизации
         auth_url = (
@@ -101,7 +108,7 @@ class YandexTokenManager:
             "grant_type": "authorization_code",
             "client_id": self.client_id,
             "redirect_uri": self.redirect_uri,
-            "code_verifier": code_verifier  # Передаем изначальный code_verifier
+            "code_verifier": code_verifier,  # Передаем изначальный code_verifier
         }
 
         response = requests.post(token_url, data=data)
@@ -115,7 +122,7 @@ class YandexTokenManager:
         """
         Запуск локального сервера для перехвата кода авторизации.
         """
-        self.server = HTTPServer(('localhost', 8080), self.CallbackHandler)
+        self.server = HTTPServer(("localhost", 8080), self.CallbackHandler)
         self.server.callback = self._handle_callback
         self.server_thread = threading.Thread(target=self.server.serve_forever)
         self.server_thread.start()
@@ -133,15 +140,18 @@ class YandexTokenManager:
             """
             Обрабатываем GET-запрос для получения кода авторизации.
             """
-            query_components = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            query_components = urllib.parse.parse_qs(
+                urllib.parse.urlparse(self.path).query
+            )
             code = query_components.get("code", [None])[0]
 
             if code:
                 self.send_response(200)
-                self.send_header('Content-type', 'text/html')
+                self.send_header("Content-type", "text/html")
                 self.end_headers()
                 self.wfile.write(
-                    b"<html><body><h1>Authorization complete! You can close this window.</h1></body></html>")
+                    b"<html><body><h1>Authorization complete! You can close this window.</h1></body></html>"
+                )
                 self.server.callback(code)
             else:
                 self.send_response(400)

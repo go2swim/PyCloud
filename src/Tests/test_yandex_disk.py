@@ -11,10 +11,10 @@ from src.Yandex.yandex_disk import YandexDisk, URL
 
 class TestYandexDisk(unittest.TestCase):
 
-    @patch('src.Yandex.yandex_disk.YandexHeadersManager')
+    @patch("src.Yandex.yandex_disk.YandexHeadersManager")
     def setUp(self, mock_headers):
         self.disk = YandexDisk("test_dir", "/path/to/test")
-        mock_headers.token = 'token'
+        mock_headers.token = "token"
         self.headers = self.disk.headers
 
     @patch("src.Yandex.yandex_disk.requests.get")
@@ -134,7 +134,7 @@ class TestYandexDisk(unittest.TestCase):
                     mock_handle_response.assert_called()
                     mock_file.assert_called_once_with("/save_path\\archive.zip", "wb")
                     mock_zipfile.assert_called_once_with("/save_path\\archive.zip", "r")
-                    # mock_zipfile.return_value.extractall.assert_called_once_with('/save_path')
+
                     remove_mock.assert_called_once_with("/save_path\\archive.zip")
 
     @patch.object(YandexDisk, "download")
@@ -334,7 +334,7 @@ class TestYandexDisk(unittest.TestCase):
         self.assertEqual(cloud_files[0]["name"], "file1.txt")
         self.assertEqual(cloud_files[1]["name"], "file3.txt")
 
-    @patch("os.path.getmtime", return_value=1609459200)  # Время изменения: 2021-01-01
+    @patch("os.path.getmtime", return_value=1609459200)
     @patch("builtins.open", new_callable=mock_open, read_data=b"test content")
     @patch("hashlib.md5")
     def test_get_data_for_comparison(self, mock_md5, mock_open, mock_getmtime):
@@ -377,7 +377,7 @@ class TestYandexDisk(unittest.TestCase):
         mock_get_os_and_clouds_files,
     ):
         mock_get_os_and_clouds_files.return_value = (
-            ["file1.txt", "file2.txt", "file3.txt"],  # локальные файлы
+            ["file1.txt", "file2.txt", "file3.txt"],
             [
                 {
                     "name": "file1.txt",
@@ -391,7 +391,7 @@ class TestYandexDisk(unittest.TestCase):
                     "md5": "def456",
                     "modified": "2021-01-01T12:00:00+00:00",
                 },
-            ],  # файлы на облаке
+            ],
         )
 
         mock_get_data_for_comparison.side_effect = [
@@ -400,7 +400,7 @@ class TestYandexDisk(unittest.TestCase):
                 datetime.datetime(2021, 1, 1, 12, 0),
                 "abc123",
                 "abc123",
-            )  # file1.txt
+            )
         ]
 
         exact_folders = ["test_folder"]
@@ -427,7 +427,7 @@ class TestYandexDisk(unittest.TestCase):
         _,
     ):
         mock_get_os_and_clouds_files.return_value = (
-            ["file1.txt", "file2.txt"],  # локальные файлы
+            ["file1.txt", "file2.txt"],
             [
                 {
                     "name": "file1.txt",

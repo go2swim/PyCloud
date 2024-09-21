@@ -68,10 +68,8 @@ class CloudSyncApp(QWidget):
         self.initUI()
 
     def start_sync_worker(self, sync_type, active_clouds):
-        # Создаем и запускаем поток
         self.sync_worker = SyncWorker(sync_type, active_clouds, self.folder_chooser)
 
-        # Подключаем сигнал запроса выбора папки к методу выбора папки в главном потоке
         self.sync_worker.folder_requested.connect(self.folder_chooser.choose_folder)
         self.sync_worker.start()
 
@@ -94,9 +92,9 @@ class CloudSyncApp(QWidget):
         self.add_folder_button.clicked.connect(self.add_folder)
         top_layout.addWidget(self.add_folder_button)
 
-        # Добавляем лейбл PyCloud
+        # лейбл PyCloud
         pycloud_label = QLabel("PyCloud")
-        pycloud_label.setStyleSheet("font-size: 24px; font-weight: bold;")
+        pycloud_label.setStyleSheet("font-size: 40px; font-weight: bold; color: royalBlue;")
         top_layout.addWidget(pycloud_label)
 
         layout.addLayout(top_layout)
@@ -109,7 +107,7 @@ class CloudSyncApp(QWidget):
         layout.addWidget(self.sync_button)
 
 
-        # Поле для выбора между PC и Cloud (пока будет заглушка)
+        # Поле для выбора между PC и Cloud
         self.choose_cloud_or_pc_layout = QHBoxLayout()
 
         self.cloud_mode = "pc"
@@ -132,8 +130,6 @@ class CloudSyncApp(QWidget):
         self.choose_cloud_or_pc_layout.addWidget(self.pc_button)
 
         layout.addLayout(self.choose_cloud_or_pc_layout)
-
-
 
         # # Прогресс-бар (пока заглушка)
         # self.progress_bar_stub = QLabel("Progress Bar Stub")
@@ -234,28 +230,16 @@ class CloudSyncApp(QWidget):
             }
         """)
 
-        # Действие при выборе папки
         self.folder_list_widget.itemClicked.connect(self.folder_selected)
 
-        # Прячем кнопку, когда показываем список папок
-        # self.show_folders_button.hide()
-
-        # Показываем список папок
         self.folder_list_widget.show()
-        # else:
-        #     # Если список уже есть, то убираем его и возвращаем кнопку
-        #     self.folder_list_widget.hide()
-        #     self.show_folders_button.show()
 
     def folder_selected(self, item):
         """Обработчик выбора папки и удаление элемента списка."""
-        # Получаем полный путь папки
         folder_path = get_os_path_by_cloud_path(item.text())
 
-        # Удаляем папку из списка синхронизации
         remove_sync_folder(folder_path)
 
-        # Удаляем элемент из списка отображения
         list_items = self.folder_list_widget.findItems(item.text(), Qt.MatchExactly)
         if list_items:
             item_index = self.folder_list_widget.row(list_items[0])
@@ -269,16 +253,13 @@ class CloudSyncApp(QWidget):
             return
 
         self.sync_button.setEnabled(False)
-
         self.sync_worker = SyncWorker(self.cloud_mode, self.active_clouds, self.folder_chooser)
 
-        # Подключаем сигнал запроса выбора папки к методу выбора папки в главном потоке
         self.sync_worker.folder_requested.connect(self.folder_chooser.choose_folder)
         self.sync_worker.start()
 
         self.sync_worker.finished.connect(self.on_sync_finished)
 
-        # Запускаем поток
         self.sync_worker.start()
 
     def on_sync_finished(self):
@@ -298,7 +279,7 @@ class CloudSyncApp(QWidget):
         return folder_path if folder_path else '.'
 
     def open_folder_dialog(self):
-        """Этот метод вызывается в главном потоке для открытия диалога выбора папки."""
+        """метод вызывается в главном потоке для открытия диалога выбора папки."""
         folder_path = QFileDialog.getExistingDirectory(self, "Выберите папку для синхронизации")
         if folder_path:
             print(f"Путь к папке: {folder_path}")
@@ -341,7 +322,6 @@ class SyncWorker(QThread):
         return actual_name
 
     def on_folder_chosen(self, folder_path):
-        # Получаем выбранную папку
         self.selected_folder = folder_path
         self.quit()  # Останавливаем поток после выбора папки
 
