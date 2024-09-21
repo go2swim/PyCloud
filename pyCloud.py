@@ -1,9 +1,9 @@
 import os
 import re
 import click
-import work_with_cloud
+import src.clouds_manager
 
-from work_with_cloud import (
+from src.clouds_manager import (
     sync_folders,
     get_and_update_sync_folders,
     save_sync_folders,
@@ -39,27 +39,30 @@ def validate_cloud_path(ctx, param, value):
     return path
 
 
-def validate_cloud_name(value):
+def validate_cloud_name(value, extension=False):
     value = int(value) - 1
-    if value < 0 or value > len(CLOUDS):
-        raise click.BadParameter(f"Пункта {value + 1} в меню нет")
+    if extension:
+        if value < 0 or value > len(CLOUDS) + 1:
+            raise click.BadParameter(f"Пункта {value + 1} в меню нет")
+    else:
+        if value < 0 or value > len(CLOUDS):
+            raise click.BadParameter(f"Пункта {value + 1} в меню нет")
 
     return value + 1
 
-
-# Создаем группу команд.
 @click.group()
 def pyCloud():
     pass
 
 
-# Листинг файлов на диске
 @pyCloud.command()
 @click.argument("folder_full_path", callback=validate_cloud_path)
 def list_files(folder_full_path):
     """Листинг файлов в главной папке"""
 
-    file_listings = work_with_cloud.list_files(folder_full_path)
+    cloud = get_clouds_menu()
+
+    file_listings = src.clouds_manager.list_files(folder_full_path, [cloud])
 
     for folder, clouds_data in file_listings.items():
         click.echo(
@@ -111,14 +114,21 @@ def watched_folders():
 @pyCloud.command()
 def sync_cloud():
     """Синхронизация пк -> облако"""
+    clouds = get_clouds_menu()
     click.echo("Starting synchronization...")
-    sync_folders()
+    sync_folders(clouds)
     click.echo("Synchronization successfully")
 
 
 @pyCloud.command()
 def sync_pc():
     """Синхронизация облако -> пк"""
+    cloud = get_clouds_menu()
+    click.echo("Starting synchronization...")
+    sync_locals_folders(cloud)
+    click.echo("Synchronization successfully")
+
+def get_clouds_menu():
     keys = list(CLOUDS.keys())
     clouds_with_keys = {i: keys[i - 1] for i in range(1, len(keys) + 1)}
     menu = "\n" + "\n".join([f"{k}: {v}" for k, v in clouds_with_keys.items()])
@@ -126,10 +136,7 @@ def sync_pc():
         text="Выберите облако с которым вы хотите синхронизировать файлы на пк" + menu,
         value_proc=validate_cloud_name,
     )
-    click.echo("Starting synchronization...")
-    sync_locals_folders(clouds_with_keys[number_in_menu])
-    click.echo("Synchronization successfully")
-
+    return clouds_with_keys[number_in_menu]
 
 def get_valid_folder_path(folder_name):
     """Запрашивает у пользователя путь до папки и проверяет его на корректность."""

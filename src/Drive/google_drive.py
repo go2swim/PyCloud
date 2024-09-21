@@ -6,18 +6,18 @@ import io
 
 import apiclient
 import httplib2
-import os
 import datetime
-import time
+import os
+import pickle
 
-from apiclient import discovery
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from oauth2client import client
-from oauth2client import tools
-from oauth2client.file import Storage
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from google.auth.transport.requests import Request
 
-from cloud_interface import CloudInterface
-from yandex_disk import format_datetime
+from src.cloud_interface import CloudInterface
+from src.Yandex.yandex_disk import format_datetime
 
 
 # try:
@@ -29,7 +29,6 @@ from yandex_disk import format_datetime
 
 TIME_DELTA = datetime.timedelta(seconds=5)
 SCOPES = ['https://www.googleapis.com/auth/drive']
-CLIENT_SECRET_FILE = 'client_secret.json'
 APPLICATION_NAME = 'Drive API Python Quickstart'
 GOOGLE_MIME_TYPES = {  # нужны для определения файлов google_docs и последующей конвертации для загрузки {docs: os_type}
     'application/vnd.google-apps.document':
@@ -47,25 +46,52 @@ GOOGLE_MIME_TYPES = {  # нужны для определения файлов g
 }
 
 
-def get_credentials():
-    home_dir = os.path.expanduser('~')
-    credential_dir = os.path.join(home_dir, '.credentials')
-    if not os.path.exists(credential_dir):
-        os.makedirs(credential_dir)
-    credential_path = os.path.join(credential_dir,
-                                   'drive-python-quickstart.json')
+def get_service():
+    """Получает сервис Google Drive API."""
+    creds = None
+    current_dir = os.path.basename(os.getcwd())
+    if current_dir == 'PyCloud':
+        token_path = os.path.join('src', 'Drive', 'token.pickle')
+    elif current_dir == 'src':
+        token_path = os.path.join('Drive', 'token.pickle')
+    elif current_dir == 'Yandex':
+        token_path = 'token.pickle'
+    else:
+        raise FileNotFoundError("Is start directory not found")
 
-    store = Storage(credential_path)
-    credentials = store.get()
-    if not credentials or credentials.invalid:
-        flow = client.flow_from_clientsecrets(CLIENT_SECRET_FILE, SCOPES)
-        flow.user_agent = APPLICATION_NAME
-        # if flags:
-        credentials = tools.run_flow(flow, store)
-        # else:  # Needed only for compatibility with Python 2.6
-        #     credentials = tools.run(flow, store)
-        print('Storing credentials to ' + credential_path)
-    return credentials
+    # Загружаем токен, если он уже существует
+    if os.path.exists(token_path):
+        with open(token_path, 'rb') as token:
+            creds = pickle.load(token)
+
+    # Если токен недействителен или отсутствует, выполняем аутентификацию
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            # client_secrets_file = 'credentials.json'
+            current_dir = os.path.basename(os.getcwd())
+            if current_dir == 'PyCloud':
+                client_secrets_file = os.path.join('src', 'Drive', 'credentials.json')
+            elif current_dir == 'src':
+                client_secrets_file = os.path.join('Drive', 'credentials.json')
+            elif current_dir == 'Yandex':
+                client_secrets_file = 'credentials.json'
+            else:
+                raise FileNotFoundError("Is start directory not found")
+
+            # Создаем поток авторизации
+            flow = InstalledAppFlow.from_client_secrets_file(client_secrets_file, SCOPES)
+
+            creds = flow.run_local_server(port=0)
+
+        # Сохраняем токен для последующего использования
+        with open(token_path, 'wb') as token:
+            pickle.dump(creds, token)
+
+    # Создаем и возвращаем сервис
+    service = build('drive', 'v3', credentials=creds)
+    return service
 
 
 def handle_response(func):
@@ -97,12 +123,10 @@ def handle_response(func):
 
 class GoogleDrive(CloudInterface):
     def __init__(self, dir_name, full_path):
-        credentials = get_credentials()
-        http = credentials.authorize(httplib2.Http())
-        self.service = discovery.build('drive', 'v3', http=http)
+        self.service = get_service()
         self.dir_name = dir_name
         self.full_path = full_path
-        from work_with_cloud import ROOT_FOLDER
+        from src.clouds_manager import ROOT_FOLDER
         self.ROOT_FOLDER = ROOT_FOLDER
         if dir_name != '':
             self.folder_id = self.check_upload()
@@ -212,7 +236,7 @@ class GoogleDrive(CloudInterface):
             self.get_drive_tree(folder_name, tree_list, root)
 
     @handle_response
-    def upload_dir_to_cloud(self, upload_folders):
+    def upload_dir_on_cloud(self, upload_folders):
         #  сортируем папки по вложенности
         upload_folders = sorted(upload_folders, key=lambda input_str: input_str.count(os.path.sep))
         for folder_dir in upload_folders:
@@ -272,7 +296,7 @@ class GoogleDrive(CloudInterface):
     def update_dir_on_cloud(self, exact_folders):
         # проходимся по папке и обновляем файлы
         for folder_dir in exact_folders:
-            from work_with_cloud import get_os_path_by_cloud_path
+            from src.clouds_manager import get_os_path_by_cloud_path
             os_path = get_os_path_by_cloud_path(folder_dir)
             os_files, clouds_files = self.get_os_and_cloud_files(self.parents_id[os.path.basename(folder_dir)], os_path)
             last_dir = os.path.split(folder_dir)[1]
@@ -300,14 +324,14 @@ class GoogleDrive(CloudInterface):
                     file_metadata = {'name': drive_file['name'], 'parents': [self.parents_id[last_dir]]}
                     media_body = MediaFileUpload(os.path.join(os_path, drive_file['name']), mimetype=file_mime)
                     self.service.files().update(fileId=file_id, media_body=media_body, fields='id').execute()
-                    print(f'Файл {drive_file['name']} успешно обновлён')
+                    print(f'Файл {drive_file["name"]} успешно обновлён')
 
             # удаляем старые файлы на drive
             for drive_file in remove_files:
                 file_id = [f['id'] for f in clouds_files
                            if f['name'] == drive_file['name']][0]
                 self.service.files().delete(fileId=file_id).execute()
-                print(f'Файл {drive_file['name']} успешно удалён на облаке')
+                print(f'Файл {drive_file["name"]} успешно удалён на облаке')
 
             # загружаем новые файлы на drive
             for os_file in upload_files:
@@ -351,7 +375,7 @@ class GoogleDrive(CloudInterface):
     def downloading_folders(self, download_folders):
         download_folders = sorted(download_folders, key=lambda input_str: input_str.count(os.path.sep))
         for folder_dir in download_folders:
-            from work_with_cloud import get_os_path_by_cloud_path
+            from src.clouds_manager import get_os_path_by_cloud_path
             os_path = get_os_path_by_cloud_path(folder_dir)
             last_dir = folder_dir.split(os.path.sep)[-1]
 
@@ -365,7 +389,7 @@ class GoogleDrive(CloudInterface):
 
             for drive_file in files:
                 self.download_file_from_drive(os_path, drive_file)
-                print(f'Файл {drive_file['name']} загружен в папку {os.path.basename(os_path)}')
+                print(f'Файл {drive_file["name"]} загружен в папку {os.path.basename(os_path)}')
 
     @handle_response
     def download_file_from_drive(self, file_path, drive_file):
@@ -406,7 +430,7 @@ class GoogleDrive(CloudInterface):
 
     def update_dir_on_pc(self, exact_folders):
         for folder_dir in exact_folders:
-            from work_with_cloud import get_os_path_by_cloud_path
+            from src.clouds_manager import get_os_path_by_cloud_path
             os_path = get_os_path_by_cloud_path(folder_dir)
             os_files, cloud_files = self.get_os_and_cloud_files(self.parents_id[os.path.split(folder_dir)[1]], os_path)
             last_dir = os.path.split(folder_dir)[1]
@@ -423,7 +447,7 @@ class GoogleDrive(CloudInterface):
                         drive_file['mimeType'] != 'application/vnd.google-apps.document' and drive_md5 != os_file_md5):
                     os.remove(os.path.join(os_path, drive_file['name']))
                     self.download_file_from_drive(os_path, drive_file)
-                    print(f'Файл {drive_file['name']} обновлён на пк')
+                    print(f'Файл {drive_file["name"]} обновлён на пк')
 
             for os_file in remove_files:
                 os.remove(os.path.join(os_path, os_file))
@@ -431,7 +455,7 @@ class GoogleDrive(CloudInterface):
 
             for drive_file in download_files:
                 self.download_file_from_drive(os_path, drive_file)
-                print(f'Файл {drive_file['name']} загружен на пк')
+                print(f'Файл {drive_file["name"]} загружен на пк')
 
 
     @handle_response
@@ -452,7 +476,7 @@ class GoogleDrive(CloudInterface):
 
             items = response.get('files', [])
 
-            from work_with_cloud import FileData
+            from src.clouds_manager import FileData
             for item in items:
                 # Определяем тип элемента: папка или файл
                 item_type = "DIR" if item['mimeType'] == 'application/vnd.google-apps.folder' else "FILE"
@@ -475,5 +499,5 @@ class GoogleDrive(CloudInterface):
             return result
 
 
-# if __name__ == '__main__':
-    # cloud = GoogleDrive('SYNC_FOLDER', 'D:\Document\SecCourseMATMEX\Python\PyCloud\SYNC_FOLDER')
+if __name__ == '__main__':
+    cloud = GoogleDrive('../../SYNC_FOLDER', 'D:\Document\SecCourseMATMEX\Python\PyCloud\SYNC_FOLDER')

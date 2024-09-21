@@ -1,37 +1,53 @@
 import hashlib
-import mimetypes
 import os
 import datetime
 import urllib
 
 import requests
 import zipfile
-from cloud_interface import CloudInterface
+from src.cloud_interface import CloudInterface
+from src.Yandex.OAuth_yandex import YandexHeadersManager
 
 URL = 'https://cloud-api.yandex.net/v1/disk/resources'
-TOKEN = 'y0_AgAAAAA-fOi6AAxLZQAAAAEOOar3AADAEGooJ61N-byf4jKn_Duv4Y7AzQ'
-headers = {'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': f'OAuth {TOKEN}'}
-
 
 class YandexDisk(CloudInterface):
     def __init__(self, dir_name, full_path):
         self.dir_name = dir_name
         self.full_path = full_path
-        import work_with_cloud
-        self.ROOT_FOLDER = work_with_cloud.ROOT_FOLDER
+        from src.clouds_manager import ROOT_FOLDER
+        self.ROOT_FOLDER = ROOT_FOLDER
+        self.TOKEN = YandexHeadersManager().token
+        self.headers = \
+            {'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': f'OAuth {self.TOKEN}'}
 
-    def handle_response(self, response):
+    def handle_response(self, response, retry_on_401=True):
         """Обработка ошибок HTTP-запросов"""
         if response.status_code in range(200, 300):
             return response.json() if response.content else {}
         else:
             error_info = response.json()
+
+            if response.status_code == 401 and retry_on_401:
+                print("Ошибка 401: токен истёк. Обновление токена...")
+                manager = YandexHeadersManager()
+                manager.refresh_token()
+                global TOKEN
+                TOKEN = manager.token
+
+                retry_response = requests.request(
+                    method=response.request.method,
+                    url=response.request.url,
+                    headers=self.headers,
+                )
+
+                return self.handle_response(retry_response, retry_on_401=False)
+
             print(f"Ошибка {response.status_code}: {error_info.get('message', 'Нет описания ошибки')}")
 
     def create_folder(self, path):
         """Создание папки. \n path: Путь к создаваемой папке."""
         try:
-            response = requests.put(f'{URL}?path={path}', headers=headers)
+            response = requests.put(f'{URL}?path={path}', headers=self.headers)
             self.handle_response(response)
             print(f"Папка '{path}' успешно создана.")
         except requests.exceptions.RequestException as e:
@@ -44,7 +60,7 @@ class YandexDisk(CloudInterface):
         replace: true or false Замена файла на Диске"""
         try:
             # Получаем ссылку на загрузку
-            response = requests.get(f'{URL}/upload?path={savefile}&overwrite={replace}', headers=headers)
+            response = requests.get(f'{URL}/upload?path={savefile}&overwrite={replace}', headers=self.headers)
             res = self.handle_response(response)
             href = res.get('href')
             if href:
@@ -58,14 +74,14 @@ class YandexDisk(CloudInterface):
     def delete(self, path):
         """Удаление папки/файла"""
         try:
-            response = requests.delete(f'{URL}?path={path}', headers=headers)
+            response = requests.delete(f'{URL}?path={path}', headers=self.headers)
             self.handle_response(response)
             print(f"Ресурс '{path}' успешно удален.")
         except requests.exceptions.RequestException as e:
             print(f"Ошибка при удалении ресурса '{path}': {e}")
 
     def download(self, downloaded_path, save_path, is_folder):
-        response = requests.get(f'{URL}/download?path={self.ROOT_FOLDER}/{downloaded_path}', headers=headers)
+        response = requests.get(f'{URL}/download?path={self.ROOT_FOLDER}/{downloaded_path}', headers=self.headers)
         res = self.handle_response(response)
         href = res.get('href')
 
@@ -75,7 +91,7 @@ class YandexDisk(CloudInterface):
         if is_folder:
             try:
                 # Получаем ссылку на скачивание
-                response = requests.get(f'{URL}/download?path={self.ROOT_FOLDER}/{downloaded_path}', headers=headers)
+                response = requests.get(f'{URL}/download?path={self.ROOT_FOLDER}/{downloaded_path}', headers=self.headers)
                 res = self.handle_response(response)
                 href = res.get('href')
 
@@ -104,7 +120,7 @@ class YandexDisk(CloudInterface):
             except zipfile.BadZipFile:
                 print(f"Файл по пути '{archive_path}' не является корректным ZIP-архивом.")
 
-        else:  # Если это файл, то скачиваем его
+        else:
             file_name = urllib.parse.unquote(href.split("filename=")[1].split("&")[0])
             file_save_path = os.path.join(save_path, file_name)
 
@@ -120,7 +136,7 @@ class YandexDisk(CloudInterface):
     def downloading_folders(self, download_folders):
         download_folders = sorted(download_folders, key=lambda input_str: input_str.count(os.path.sep))
         for clouds_folder in download_folders:
-            from work_with_cloud import get_os_path_by_cloud_path
+            from src.clouds_manager import get_os_path_by_cloud_path
             root_path = get_os_path_by_cloud_path(clouds_folder)  # D:\...\SyncFolder\clouds_folder[1:]
             if os.path.exists(root_path):
                 continue
@@ -133,7 +149,7 @@ class YandexDisk(CloudInterface):
         path = path.replace(os.path.sep, '/')
 
         try:
-            response = requests.get(f'{URL}?path={path}&limit=1000', headers=headers)
+            response = requests.get(f'{URL}?path={path}&limit=1000', headers=self.headers)
             folder_info = self.handle_response(response)
             if not folder_info:
                 print('Путь не корректен')
@@ -141,7 +157,7 @@ class YandexDisk(CloudInterface):
 
             items = folder_info.get('_embedded', {}).get('items', [])
 
-            from work_with_cloud import FileData
+            from src.clouds_manager import FileData
             for item in items:
                 result.append(FileData(
                     item_type="DIR" if item['type'] == "dir" else "FILE",
@@ -156,7 +172,7 @@ class YandexDisk(CloudInterface):
             print(f"Ошибка при получении информации о папке: {e}")
 
     def check_root_folder(self):
-        response = requests.get(f'{URL}?path=/', headers=headers)
+        response = requests.get(f'{URL}?path=/', headers=self.headers)
         items = self.handle_response(response)
         return self.ROOT_FOLDER in [item['name'] for item in items['_embedded']['items']]
 
@@ -164,7 +180,7 @@ class YandexDisk(CloudInterface):
         if not self.check_root_folder():
             self.create_folder(f'{self.ROOT_FOLDER}')
 
-        response = requests.get(f'{URL}?path=/{self.ROOT_FOLDER}', headers=headers)
+        response = requests.get(f'{URL}?path=/{self.ROOT_FOLDER}', headers=self.headers)
         items = self.handle_response(response)
         if self.dir_name not in [item['name'] for item in items['_embedded']['items']]:
             self.create_folder(f'{self.ROOT_FOLDER}/{self.dir_name}')
@@ -176,7 +192,7 @@ class YandexDisk(CloudInterface):
         if folder_name == '':
             root = ''
         # получаем список папок
-        request = requests.get(f'{URL}?path=/{self.ROOT_FOLDER}/{root.replace(os.path.sep, '/')}', headers=headers)
+        request = requests.get(f'{URL}?path=/{self.ROOT_FOLDER}/{root.replace(os.path.sep, "/")}', headers=self.headers)
         response = self.handle_response(request)
 
         items = response['_embedded']['items']
@@ -188,15 +204,15 @@ class YandexDisk(CloudInterface):
             folder_name = item['name']
             self.get_cloud_tree(folder_name, tree_list, root)
 
-    def upload_dir_to_cloud(self, upload_folders):
+    def upload_dir_on_cloud(self, upload_folders):
         upload_folders = sorted(upload_folders, key=lambda input_str: input_str.count(os.path.sep))
 
         for folder_dir in upload_folders:
-            path = f'{'\\'.join(self.full_path.split(os.path.sep)[:-1])}{os.path.sep}{folder_dir}'
+            path = f'{os.path.sep.join(self.full_path.split(os.path.sep)[:-1])}{os.path.sep}{folder_dir}'
 
             files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
 
-            self.create_folder(f'{self.ROOT_FOLDER}/{folder_dir.replace(os.path.sep, '/')}')
+            self.create_folder(f'{self.ROOT_FOLDER}/{folder_dir.replace(os.path.sep, "/")}')
 
             for file_name in files:
                 path_to_file_os = f'{folder_dir}\\{file_name}'
@@ -207,7 +223,7 @@ class YandexDisk(CloudInterface):
         os_files = [f for f in os.listdir(full_path) if os.path.isfile(os.path.join(full_path, f))]
 
         request = requests.get(
-            f'{URL}?path=/{self.ROOT_FOLDER}/{folder_dir.replace(os.path.sep, '/')}', headers=headers)
+            f'{URL}?path=/{self.ROOT_FOLDER}/{folder_dir.replace(os.path.sep, "/")}', headers=self.headers)
         response = self.handle_response(request)
 
         cloud_files = [f for f in response['_embedded']['items'] if f['type'] == 'file']
@@ -226,7 +242,7 @@ class YandexDisk(CloudInterface):
 
     def update_dir_on_cloud(self, exact_folders):
         for folder_dir in exact_folders:
-            full_path = '\\'.join(self.full_path.split(os.path.sep)[:-1]) + '\\' + folder_dir
+            full_path = os.path.sep.join(self.full_path.split(os.path.sep)[:-1]) + os.path.sep + folder_dir
             os_files, cloud_files = self.get_os_and_clouds_files(folder_dir, full_path)
 
             refresh_files = [f for f in cloud_files if f['name'] in os_files]
@@ -247,11 +263,11 @@ class YandexDisk(CloudInterface):
 
             for file_name in upload_files:
                 self.upload_file(os.path.join(full_path, file_name),
-                                 f'{self.ROOT_FOLDER}/{folder_dir.replace(os.path.sep, '/')}/{file_name}')
+                                 f'{self.ROOT_FOLDER}/{folder_dir.replace(os.path.sep, "/")}/{file_name}')
 
     def update_dir_on_pc(self, exact_folders):
         for folder_dir in exact_folders:
-            from work_with_cloud import get_os_path_by_cloud_path
+            from src.clouds_manager import get_os_path_by_cloud_path
             full_path = get_os_path_by_cloud_path(folder_dir)
             os_files, cloud_files = self.get_os_and_clouds_files(folder_dir, full_path)
 
@@ -277,12 +293,9 @@ class YandexDisk(CloudInterface):
 
     def remove_old_dir_on_cloud(self, remove_folders):
         for remove_folder in remove_folders:
-            self.delete(f'{self.ROOT_FOLDER}/{remove_folder.replace(os.path.sep, '/')}')
+            self.delete(f'{self.ROOT_FOLDER}/{remove_folder.replace(os.path.sep, "/")}')
 
 
 def format_datetime(iso_date):
     return datetime.datetime.fromisoformat(iso_date.replace("Z", "+00:00"))
 
-
-if __name__ == '__main__':
-    pass

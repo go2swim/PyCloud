@@ -2,20 +2,18 @@ import unittest
 import datetime
 from unittest.mock import patch, MagicMock, mock_open
 
-import google_drive
-from google_drive import GoogleDrive
+from src.Drive import google_drive
+from src.Drive.google_drive import GoogleDrive
 import os
 
 
 class TestGoogleDrive(unittest.TestCase):
 
-    @patch("google_drive.GoogleDrive.check_upload", return_value="test_folder_id")
-    @patch("google_drive.get_credentials")
-    @patch("google_drive.discovery.build")
-    def setUp(self, mock_build, mock_credentials, _):
+    @patch("src.Drive.google_drive.GoogleDrive.check_upload", return_value="test_folder_id")
+    @patch("src.Drive.google_drive.get_service")
+    def setUp(self, mock_build, _):
         self.mock_service = MagicMock()
         mock_build.return_value = self.mock_service
-        mock_credentials.return_value = MagicMock()
 
         self.drive = GoogleDrive(dir_name="test_folder", full_path="/test/path")
         self.drive.ROOT_FOLDER = "test_root"
@@ -25,7 +23,7 @@ class TestGoogleDrive(unittest.TestCase):
             "test_folder": "test_folder_id",
         }
 
-    @patch("google_drive.GoogleDrive.check_upload", return_value="123")
+    @patch("src.Drive.google_drive.GoogleDrive.check_upload", return_value="123")
     def test_init(self, mock_check_upload):
         self.assertEqual(self.drive.dir_name, "test_folder")
         self.assertEqual(self.drive.full_path, "/test/path")
@@ -46,7 +44,7 @@ class TestGoogleDrive(unittest.TestCase):
         self.assertEqual(folder_id, "folder_id")
         self.assertEqual(mock_files_list.call_count, 2)
 
-    @patch("google_drive.GoogleDrive.root_folder_upload")
+    @patch("src.Drive.google_drive.GoogleDrive.root_folder_upload")
     def test_check_upload_root_folder_created(self, mock_folder_upload):
         mock_files_list = self.mock_service.files().list
         mock_files_create = self.mock_service.files().create
@@ -65,8 +63,8 @@ class TestGoogleDrive(unittest.TestCase):
         self.assertEqual(folder_id, "123")
         self.assertEqual(mock_files_list.call_count, 2)
 
-    @patch("google_drive.os.walk")
-    @patch("google_drive.MediaFileUpload")
+    @patch("src.Drive.google_drive.os.walk")
+    @patch("src.Drive.google_drive.MediaFileUpload")
     def test_root_folder_upload(self, mock_media_upload, mock_os_walk):
         mock_os_walk.return_value = [
             ("\\test\\path", ["subdir"], ["file1.txt", "file2.txt"])
@@ -79,7 +77,7 @@ class TestGoogleDrive(unittest.TestCase):
         self.assertEqual(folder_id["path"], "folder_id")
         mock_media_upload.assert_called()
 
-    @patch("google_drive.GoogleDrive.get_drive_tree")
+    @patch("src.Drive.google_drive.GoogleDrive.get_drive_tree")
     def test_get_cloud_tree_with_empty_str(self, mock_get_drive_tree):
         self.drive.root_id = "1"
         self.drive.get_cloud_tree("", [], "")
@@ -88,7 +86,7 @@ class TestGoogleDrive(unittest.TestCase):
         )
         mock_get_drive_tree.assert_called_with(self.drive.ROOT_FOLDER, [], "")
 
-    @patch("google_drive.GoogleDrive.get_drive_tree")
+    @patch("src.Drive.google_drive.GoogleDrive.get_drive_tree")
     def test_get_cloud_tree(self, mock_get_drive_tree):
         self.drive.root_id = "1"
         self.drive.get_cloud_tree("1\\2", [], "")
@@ -168,8 +166,8 @@ class TestGoogleDrive(unittest.TestCase):
 
     @patch("os.listdir")
     @patch("os.path.isfile")
-    @patch("google_drive.MediaFileUpload")
-    @patch("google_drive.mimetypes.MimeTypes")
+    @patch("src.Drive.google_drive.MediaFileUpload")
+    @patch("src.Drive.google_drive.mimetypes.MimeTypes")
     def test_upload_dir_to_cloud(
         self, mock_mimetypes, mock_media_upload, mock_isfile, mock_listdir
     ):
@@ -191,12 +189,12 @@ class TestGoogleDrive(unittest.TestCase):
 
         upload_folders = ["root_folder\\test_folder"]
 
-        self.drive.upload_dir_to_cloud(upload_folders)
+        self.drive.upload_dir_on_cloud(upload_folders)
 
         mock_files_create.assert_called()
 
-    @patch("google_drive.os.listdir")
-    @patch("google_drive.os.path.isfile")
+    @patch("src.Drive.google_drive.os.listdir")
+    @patch("src.Drive.google_drive.os.path.isfile")
     def test_get_os_and_cloud_files(self, mock_isfile, mock_listdir):
         mock_listdir.return_value = ["file1.txt", "file2.txt"]
         mock_isfile.return_value = True
@@ -220,9 +218,9 @@ class TestGoogleDrive(unittest.TestCase):
         self.assertEqual(os_files, ["file1.txt", "file2.txt"])
         self.assertEqual(cloud_files[0]["name"], "file1.txt")
 
-    @patch("google_drive.os.path.getmtime")
-    @patch("google_drive.open", create=True)
-    @patch("google_drive.hashlib.md5")
+    @patch("src.Drive.google_drive.os.path.getmtime")
+    @patch("src.Drive.google_drive.open", create=True)
+    @patch("src.Drive.google_drive.hashlib.md5")
     def test_get_data_for_comparison(self, mock_md5, mock_open, mock_getmtime):
         mock_getmtime.return_value = 1609459200  # 1 января 2024
 
@@ -262,10 +260,10 @@ class TestGoogleDrive(unittest.TestCase):
         self.assertEqual(os_file_md5, expected_os_file_md5)
         self.assertEqual(drive_md5, expected_drive_md5)
 
-    @patch("work_with_cloud.get_os_path_by_cloud_path")
-    @patch("google_drive.GoogleDrive.get_data_for_comparison")
-    @patch("google_drive.GoogleDrive.get_os_and_cloud_files")
-    @patch("google_drive.MediaFileUpload")
+    @patch("src.clouds_manager.get_os_path_by_cloud_path")
+    @patch("src.Drive.google_drive.GoogleDrive.get_data_for_comparison")
+    @patch("src.Drive.google_drive.GoogleDrive.get_os_and_cloud_files")
+    @patch("src.Drive.google_drive.MediaFileUpload")
     def test_update_dir_on_cloud(
         self,
         mock_media_upload,
@@ -345,7 +343,7 @@ class TestGoogleDrive(unittest.TestCase):
 
         self.mock_service.files().create.assert_called_once()
 
-    @patch("google_drive.os.path.sep", "/")
+    @patch("src.Drive.google_drive.os.path.sep", "/")
     def test_remove_old_dir_on_cloud(self):
         self.drive.parents_id = {
             "sub_folder1": "sub_folder1_id",
@@ -372,16 +370,16 @@ class TestGoogleDrive(unittest.TestCase):
 
         self.assertEqual(self.drive.service.files().delete.call_count, 3)
 
-    @patch("google_drive.os.path.sep", "/")
+    @patch("src.Drive.google_drive.os.path.sep", "/")
     def test_remove_old_dir_on_cloud_empty(self):
         remove_folders = []
 
         self.drive.remove_old_dir_on_cloud(remove_folders)
         self.drive.service.files().delete.assert_not_called()
 
-    @patch("google_drive.os.makedirs")
-    @patch("work_with_cloud.get_os_path_by_cloud_path")
-    @patch("google_drive.GoogleDrive.download_file_from_drive")
+    @patch("src.Drive.google_drive.os.makedirs")
+    @patch("src.clouds_manager.get_os_path_by_cloud_path")
+    @patch("src.Drive.google_drive.GoogleDrive.download_file_from_drive")
     def test_downloading_folders(
         self, mock_download_file, mock_get_os_path, mock_makedirs
     ):
@@ -435,8 +433,8 @@ class TestGoogleDrive(unittest.TestCase):
         # Проверка, что метод загрузки файлов был вызван 4 раза (по 2 файла на каждую папку)
         self.assertEqual(mock_download_file.call_count, 4)
 
-    @patch("google_drive.os.makedirs")
-    @patch("work_with_cloud.get_os_path_by_cloud_path")
+    @patch("src.Drive.google_drive.os.makedirs")
+    @patch("src.clouds_manager.get_os_path_by_cloud_path")
     def test_downloading_folders_empty(self, _, mock_makedirs):
         download_folders = []
 
@@ -446,7 +444,7 @@ class TestGoogleDrive(unittest.TestCase):
 
         self.drive.service.files().list.assert_not_called()
 
-    @patch("google_drive.io.FileIO")
+    @patch("src.Drive.google_drive.io.FileIO")
     def test_download_google_doc_file(self, mock_fileio):
         drive_file = {
             "id": "file_id_123",
@@ -470,8 +468,8 @@ class TestGoogleDrive(unittest.TestCase):
 
         mock_fileio.assert_called_once_with("\\test\\path\\Test Google Doc.docx", "wb")
 
-    @patch("google_drive.MediaIoBaseDownload")
-    @patch("google_drive.io.FileIO", new_callable=mock_open)
+    @patch("src.Drive.google_drive.MediaIoBaseDownload")
+    @patch("src.Drive.google_drive.io.FileIO", new_callable=mock_open)
     def test_download_regular_file(self, mock_fileio, mock_downloader):
         drive_file = {
             "id": "file_id_456",
@@ -493,11 +491,11 @@ class TestGoogleDrive(unittest.TestCase):
         mock_fileio.assert_called_once_with("\\test\\path\\test_file.txt", "wb")
         self.assertEqual(mock_downloader.return_value.next_chunk.call_count, 2)
 
-    @patch("work_with_cloud.get_os_path_by_cloud_path")
-    @patch("google_drive.os.remove")
-    @patch("google_drive.os.path.join", side_effect=lambda *args: "/".join(args))
-    @patch("google_drive.GoogleDrive.get_data_for_comparison")
-    @patch("google_drive.GoogleDrive.download_file_from_drive")
+    @patch("src.clouds_manager.get_os_path_by_cloud_path")
+    @patch("src.Drive.google_drive.os.remove")
+    @patch("src.Drive.google_drive.os.path.join", side_effect=lambda *args: "/".join(args))
+    @patch("src.Drive.google_drive.GoogleDrive.get_data_for_comparison")
+    @patch("src.Drive.google_drive.GoogleDrive.download_file_from_drive")
     def test_update_dir_on_pc(
         self,
         mock_download_file,
@@ -566,9 +564,9 @@ class TestGoogleDrive(unittest.TestCase):
         )
         self.assertEqual(mock_get_data.call_count, 2)
 
-    @patch("work_with_cloud.FileData")
-    @patch("google_drive.format_datetime")
-    @patch("google_drive.GoogleDrive.get_cloud_tree")
+    @patch("src.clouds_manager.FileData")
+    @patch("src.Drive.google_drive.format_datetime")
+    @patch("src.Drive.google_drive.GoogleDrive.get_cloud_tree")
     def test_list_files_success(
         self, mock_get_cloud_tree, mock_format_datetime, mock_file_data
     ):
@@ -617,7 +615,7 @@ class TestGoogleDrive(unittest.TestCase):
         self.assertEqual(len(result), 2)
         self.assertEqual(mock_file_data.call_count, 2)
 
-    @patch("google_drive.GoogleDrive.get_os_and_cloud_files")
+    @patch("src.Drive.google_drive.GoogleDrive.get_os_and_cloud_files")
     def test_handle_response(self, mock_get_files):
         mock_get_files.side_effect = Exception("Some error")
 

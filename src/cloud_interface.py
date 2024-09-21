@@ -24,7 +24,7 @@ class CloudInterface(ABC):
         pass
 
     @abstractmethod
-    def upload_dir_to_cloud(self, upload_folders) -> None:
+    def upload_dir_on_cloud(self, upload_folders) -> None:
         """Downloads new folders that are on the computer, but not on the cloud"""
         pass
 
@@ -48,13 +48,16 @@ class CloudInterface(ABC):
         """
         pass
 
+    @abstractmethod
     def check_root_folder(self) -> bool:
         """Checks if the root folder exists on the cloud"""
         pass
 
+    @abstractmethod
     def downloading_folders(self, download_folders) -> None:
         pass
 
+    @abstractmethod
     def update_dir_on_pc(self, exact_folders) -> None:
         """Look folder and make a list of files: to delete, update and download"""
         pass

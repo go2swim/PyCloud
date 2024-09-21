@@ -5,16 +5,19 @@ from unittest import mock
 from unittest.mock import patch, MagicMock, mock_open
 import requests
 
-import yandex_disk
-from yandex_disk import YandexDisk, headers, URL
+from src.Yandex import yandex_disk
+from src.Yandex.yandex_disk import YandexDisk, URL
 
 
 class TestYandexDisk(unittest.TestCase):
-    def setUp(self):
-        self.disk = YandexDisk("test_dir", "/path/to/test")
-        self.headers = headers
 
-    @patch("yandex_disk.requests.get")
+    @patch('src.Yandex.yandex_disk.YandexHeadersManager')
+    def setUp(self, mock_headers):
+        self.disk = YandexDisk("test_dir", "/path/to/test")
+        mock_headers.token = 'token'
+        self.headers = self.disk.headers
+
+    @patch("src.Yandex.yandex_disk.requests.get")
     def test_handle_response_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -23,7 +26,7 @@ class TestYandexDisk(unittest.TestCase):
         result = self.disk.handle_response(mock_response)
         self.assertEqual(result, {"result": "success"})
 
-    @patch("yandex_disk.requests.get")
+    @patch("src.Yandex.yandex_disk.requests.get")
     def test_handle_response_error(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 400
@@ -33,7 +36,7 @@ class TestYandexDisk(unittest.TestCase):
             self.disk.handle_response(mock_response)
             mocked_print.assert_called_with("Ошибка 400: Bad request")
 
-    @patch("yandex_disk.requests.put")
+    @patch("src.Yandex.yandex_disk.requests.put")
     def test_create_folder_success(self, mock_put):
         mock_response = MagicMock()
         mock_response.status_code = 201
@@ -42,7 +45,7 @@ class TestYandexDisk(unittest.TestCase):
             self.disk.create_folder("test_folder")
             mock_handle_response.assert_called_once_with(mock_response)
 
-    @patch("yandex_disk.requests.put")
+    @patch("src.Yandex.yandex_disk.requests.put")
     def test_create_folder_request_exception(self, mock_put):
         mock_put.side_effect = requests.exceptions.RequestException(
             "Error creating folder"
@@ -53,8 +56,8 @@ class TestYandexDisk(unittest.TestCase):
                 "Ошибка при создании папки: Error creating folder"
             )
 
-    @patch("yandex_disk.requests.get")
-    @patch("yandex_disk.requests.put")
+    @patch("src.Yandex.yandex_disk.requests.get")
+    @patch("src.Yandex.yandex_disk.requests.put")
     def test_upload_file_success(self, mock_put, mock_get):
         mock_response_get = MagicMock()
         mock_response_get.status_code = 200
@@ -77,7 +80,7 @@ class TestYandexDisk(unittest.TestCase):
                 mock_put.assert_called_once()
                 mock_handle_response.assert_called_with(mock_response_put)
 
-    @patch("yandex_disk.requests.get")
+    @patch("src.Yandex.yandex_disk.requests.get")
     def test_upload_file_request_exception(self, mock_get):
         mock_get.side_effect = requests.exceptions.RequestException(
             "Error getting upload link"
@@ -88,13 +91,13 @@ class TestYandexDisk(unittest.TestCase):
                 "Ошибка при загрузке файла 'local_file.txt': Error getting upload link"
             )
 
-    @patch("yandex_disk.requests.delete")
+    @patch("src.Yandex.yandex_disk.requests.delete")
     def test_delete(self, mock_delete):
         with patch("builtins.print") as mocked_print:
             self.disk.delete("/test")
             mocked_print.assert_called_with(f"Ресурс '/test' успешно удален.")
 
-    @patch("yandex_disk.requests.get")
+    @patch("src.Yandex.yandex_disk.requests.get")
     def test_download_file_success(self, mock_get):
         mock_response_get = MagicMock()
         mock_response_get.status_code = 200
@@ -112,7 +115,7 @@ class TestYandexDisk(unittest.TestCase):
                 mock_file.assert_called_once()
 
     @patch("os.remove")
-    @patch("yandex_disk.requests.get")
+    @patch("src.Yandex.yandex_disk.requests.get")
     def test_download_folder_success(self, mock_get, remove_mock):
         mock_response_get = MagicMock()
         mock_response_get.status_code = 200
@@ -124,7 +127,7 @@ class TestYandexDisk(unittest.TestCase):
         mock_get.return_value = mock_download_response
 
         with patch("builtins.open", mock_open()) as mock_file:
-            with patch("yandex_disk.zipfile.ZipFile") as mock_zipfile:
+            with patch("src.Yandex.yandex_disk.zipfile.ZipFile") as mock_zipfile:
                 with patch.object(self.disk, "handle_response") as mock_handle_response:
                     self.disk.download("folder", "/save_path", is_folder=True)
 
@@ -140,14 +143,14 @@ class TestYandexDisk(unittest.TestCase):
         download_folders = ["folder1", "folder2/subfolder"]
 
         with patch(
-            "work_with_cloud.get_os_path_by_cloud_path",
+            "src.clouds_manager.get_os_path_by_cloud_path",
             side_effect=lambda x: f"/local_path/{x}",
         ):
             self.disk.downloading_folders(download_folders)
 
             self.assertEqual(mock_download.call_count, 2)
 
-    @patch("yandex_disk.requests.get")
+    @patch("src.Yandex.yandex_disk.requests.get")
     def test_list_files_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -170,7 +173,7 @@ class TestYandexDisk(unittest.TestCase):
         }
         mock_get.return_value = mock_response
 
-        with patch("work_with_cloud.FileData") as mock_filedata:
+        with patch("src.clouds_manager.FileData") as mock_filedata:
             with patch.object(
                 self.disk, "handle_response", return_value=mock_response.json()
             ):
@@ -190,7 +193,7 @@ class TestYandexDisk(unittest.TestCase):
                     item_modified=mock.ANY,
                 )
 
-    @patch("yandex_disk.requests.get")
+    @patch("src.Yandex.yandex_disk.requests.get")
     def test_check_root_folder(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -212,7 +215,7 @@ class TestYandexDisk(unittest.TestCase):
 
     @patch.object(YandexDisk, "create_folder")
     @patch.object(YandexDisk, "check_root_folder", return_value=False)
-    @patch("yandex_disk.requests.get")
+    @patch("src.Yandex.yandex_disk.requests.get")
     def test_check_upload(self, mock_get, mock_check_root_folder, mock_create_folder):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -231,7 +234,7 @@ class TestYandexDisk(unittest.TestCase):
             f"{self.disk.ROOT_FOLDER}/{self.disk.dir_name}"
         )
 
-    @patch("yandex_disk.requests.get")
+    @patch("src.Yandex.yandex_disk.requests.get")
     def test_get_cloud_tree(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -275,7 +278,7 @@ class TestYandexDisk(unittest.TestCase):
 
         mock_listdir.side_effect = [["file1.txt", "file2.txt"], ["file3.txt"]]
 
-        self.disk.upload_dir_to_cloud(upload_folders)
+        self.disk.upload_dir_on_cloud(upload_folders)
 
         mock_create_folder.assert_any_call(f"{self.disk.ROOT_FOLDER}/folder1")
         mock_create_folder.assert_any_call(f"{self.disk.ROOT_FOLDER}/folder2/subfolder")
@@ -295,7 +298,7 @@ class TestYandexDisk(unittest.TestCase):
 
     @patch("os.listdir")
     @patch("os.path.isfile", return_value=True)
-    @patch("yandex_disk.requests.get")
+    @patch("src.Yandex.yandex_disk.requests.get")
     def test_get_os_and_clouds_files(self, mock_get, mock_isfile, mock_listdir):
         mock_listdir.return_value = ["file1.txt", "file2.txt"]
 
@@ -325,7 +328,7 @@ class TestYandexDisk(unittest.TestCase):
         self.assertEqual(os_files, ["file1.txt", "file2.txt"])
 
         mock_get.assert_called_once_with(
-            f"{URL}?path=/{self.disk.ROOT_FOLDER}/test_folder", headers=headers
+            f"{URL}?path=/{self.disk.ROOT_FOLDER}/test_folder", headers=self.headers
         )
         self.assertEqual(len(cloud_files), 2)
         self.assertEqual(cloud_files[0]["name"], "file1.txt")
@@ -410,7 +413,7 @@ class TestYandexDisk(unittest.TestCase):
 
         mock_delete.assert_called_once_with("/path/file4.txt")
 
-    @patch("work_with_cloud.get_os_path_by_cloud_path", return_value="test_folder")
+    @patch("src.clouds_manager.get_os_path_by_cloud_path", return_value="test_folder")
     @patch.object(yandex_disk.YandexDisk, "get_os_and_clouds_files")
     @patch.object(yandex_disk.YandexDisk, "get_data_for_comparison")
     @patch.object(yandex_disk.YandexDisk, "download")

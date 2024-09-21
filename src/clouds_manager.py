@@ -4,15 +4,30 @@ import shutil
 import re
 from dataclasses import dataclass
 
-from yandex_disk import YandexDisk
-from google_drive import GoogleDrive
+from src.Yandex.yandex_disk import YandexDisk
+from src.Drive.google_drive import GoogleDrive
+from src.Dropbox.dropbox import DropBox
 
 
 CLOUDS = {'yandex': lambda folder_full_path: YandexDisk(os.path.basename(folder_full_path), folder_full_path),
-          'google': lambda folder_full_path: GoogleDrive(os.path.basename(folder_full_path), folder_full_path)}
-SAVE_SYNC_FILE = r'./save_sync_folder.txt'
+          'google': lambda folder_full_path: GoogleDrive(os.path.basename(folder_full_path), folder_full_path),
+          'dropbox': lambda folder_full_path: DropBox(os.path.basename(folder_full_path), folder_full_path)}
+SAVE_SYNC_FILE = r'save_sync_folder.txt' if os.path.basename(os.getcwd()) == 'src' \
+    else os.path.join('src', 'save_sync_folder.txt')
 ROOT_FOLDER = 'SYNC_FOLDERS'
 
+def remove_sync_folder(folder_path):
+    try:
+        with open(SAVE_SYNC_FILE, 'r') as file:
+            paths = [line.strip() for line in file.readlines()]
+
+        paths.remove(folder_path)
+
+        with open(SAVE_SYNC_FILE, 'w') as file:
+            for path in paths:
+                file.write(path + '\n')
+    except FileNotFoundError:
+        print('Нет отслеживаемых папок')
 
 def get_and_update_sync_folders():
     """returns a list of existing paths and deleting all non-existing paths from the file"""
@@ -60,10 +75,16 @@ def get_os_tree(full_path):
 
     return os_tree_list
 
-def sync_folders():
+def sync_folders(list_clouds=[]):
     sync_folders = get_and_update_sync_folders()
-    for get_cloud in CLOUDS.values():
-        print(f'Синхронизация {get_cloud('').__class__.__name__}')
+
+    if list_clouds:
+        get_clouds = [v for k, v in CLOUDS.items() if k in list_clouds]
+    else:
+        get_clouds = CLOUDS.values()
+
+    for get_cloud in get_clouds:
+        print(f'Синхронизация {get_cloud("").__class__.__name__}')
         for folder_full_path in sync_folders:
             cloud = get_cloud(folder_full_path)
             name_folder = os.path.basename(folder_full_path)
@@ -83,7 +104,7 @@ def sync_folders():
             exact_folders = list(set(os_tree_list).intersection(set(tree_list)))  # SYNC_FOLDER\1\2...
             exact_folders.append(name_folder)  # добавим в обновляемые исходную папку
 
-            cloud.upload_dir_to_cloud(upload_folders)
+            cloud.upload_dir_on_cloud(upload_folders)
 
             cloud.update_dir_on_cloud(exact_folders)
 
@@ -136,11 +157,15 @@ class FileData:
     item_modified: datetime
 
 
-def list_files(path):
+def list_files(path, clouds: [str]):
     # path в формате ROOT_FOLDER\...\folder
+    if clouds:
+        get_clouds = [v for k, v in CLOUDS.items() if k in clouds]
+    else:
+        get_clouds = CLOUDS.values()
 
-    result = {os.path.basename(path): {} for _ in range(len(CLOUDS))}
-    for get_cloud in CLOUDS.values():
+    result = {os.path.basename(path): {} for _ in range(len(get_clouds))}
+    for get_cloud in get_clouds:
         cloud = get_cloud('')
 
         if not cloud.check_root_folder():
@@ -171,10 +196,29 @@ def get_os_path_by_cloud_path(clouds_path):
     from pyCloud import get_valid_folder_path
     return get_valid_folder_path(clouds_path)  # clouds_path всегда в таком случае просто название папки
 
+    # from gui import CloudSyncApp
+    # # Проверяем, существует ли активное приложение GUI
+    # app = QApplication.instance()
+    #
+    # if app:
+    #     # Если есть активное приложение, ищем его окна
+    #     for widget in app.topLevelWidgets():
+    #         if isinstance(widget, CloudSyncApp):
+    #             # Вызываем метод для выбора папки из GUI
+    #             return widget.choose_folder()
+    #
+    # # Если нет активного приложения, создаём временный экземпляр QApplication
+    # app = QApplication([])  # Создание временного приложения
+    # folder_path = QFileDialog.getExistingDirectory(None, "Select Folder")
+    # app.quit()  # Закрываем временное приложение
+    #
+    # return folder_path if folder_path else '.'
+
 
 if __name__ == '__main__':
     # save_sync_folders(r'D:\Document\SecCourseMATMEX\Python\PyCloud\SYNC_FOLDER')
     # print(get_sync_folders())
-    # sync_locals_folders('yandex')
-    sync_folders()
-    # list_files('SYNC_FOLDERS\\SYNC_FOLDER\\1\\1')
+    # sync_locals_folders('dropbox')
+    sync_folders(['google'])
+    # list_files('SYNC_FOLDERS\\SYNC_FOLDER\\1\\1', 'google')
+    # print(get_os_path_by_cloud_path('acb'))

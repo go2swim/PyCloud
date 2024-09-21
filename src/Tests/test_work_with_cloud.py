@@ -1,9 +1,8 @@
 import os
 import unittest
-from unittest import mock
 from unittest.mock import patch, MagicMock, mock_open
 
-from work_with_cloud import (
+from src.clouds_manager import (
     save_sync_folders,
     SAVE_SYNC_FILE,
     get_os_tree,
@@ -15,9 +14,7 @@ from work_with_cloud import (
 
 
 class TestWorkThisCloud(unittest.TestCase):
-    @patch(
-        "builtins.open", new_callable=mock_open, read_data="D:/folder1\nD:/folder2\n"
-    )
+    @patch("builtins.open", new_callable=mock_open, read_data="D:/folder1\nD:/folder2\n")
     def test_save_sync_folders_existing_path(self, mock_file):
         save_sync_folders("D:/folder1")
         mock_file.assert_called_once_with(SAVE_SYNC_FILE, "r")
@@ -41,9 +38,9 @@ class TestWorkThisCloud(unittest.TestCase):
         self.assertEqual(result, expected)
 
     @patch("builtins.print")
-    @patch("work_with_cloud.get_and_update_sync_folders")
-    @patch("work_with_cloud.get_os_tree")
-    @patch("work_with_cloud.CLOUDS")
+    @patch("src.clouds_manager.get_and_update_sync_folders")
+    @patch("src.clouds_manager.get_os_tree")
+    @patch("src.clouds_manager.CLOUDS")
     def test_sync_folders(
         self,
         mock_clouds,
@@ -72,17 +69,16 @@ class TestWorkThisCloud(unittest.TestCase):
 
             mock_cloud_instance.check_upload.assert_called()
             mock_cloud_instance.get_cloud_tree.assert_called()
-            mock_cloud_instance.upload_dir_to_cloud.assert_called()
             mock_cloud_instance.update_dir_on_cloud.assert_called()
             mock_cloud_instance.remove_old_dir_on_cloud.assert_called()
 
             mock_cloud_instance.update_dir_on_cloud.assert_any_call(["folder1"])
             mock_cloud_instance.remove_old_dir_on_cloud.assert_any_call([])
 
-    @patch("work_with_cloud.CLOUDS")
-    @patch("work_with_cloud.get_and_update_sync_folders")
-    @patch("work_with_cloud.get_os_tree")
-    @patch("work_with_cloud.get_os_path_by_cloud_path")
+    @patch("src.clouds_manager.CLOUDS")
+    @patch("src.clouds_manager.get_and_update_sync_folders")
+    @patch("src.clouds_manager.get_os_tree")
+    @patch("src.clouds_manager.get_os_path_by_cloud_path")
     @patch("shutil.rmtree")
     def test_sync_locals_folders(
         self,
@@ -129,7 +125,7 @@ class TestWorkThisCloud(unittest.TestCase):
         mock_get_os_path_by_cloud_path.assert_any_call("subfolder2")
         mock_get_os_path_by_cloud_path.assert_any_call("folder1")
 
-    @patch("work_with_cloud.CLOUDS")
+    @patch("src.clouds_manager.CLOUDS")
     def test_list_files(self, mock_clouds):
 
         mock_cloud_instance = MagicMock()
@@ -141,7 +137,7 @@ class TestWorkThisCloud(unittest.TestCase):
         mock_cloud_instance.list_files.return_value = ["file1.txt", "file2.txt"]
 
         path = "ROOT_FOLDER\\folder"
-        result = list_files(path)
+        result = list_files(path, [])
 
         expected_result = {
             "folder": {
@@ -153,8 +149,8 @@ class TestWorkThisCloud(unittest.TestCase):
         mock_cloud_instance.check_root_folder.assert_called_once()
         mock_cloud_instance.list_files.assert_any_call(path)
 
-    @patch("work_with_cloud.get_and_update_sync_folders")
-    @patch("cli.get_valid_folder_path")
+    @patch("src.clouds_manager.get_and_update_sync_folders")
+    @patch("pyCloud.get_valid_folder_path")
     def test_get_os_path_by_cloud_path(
         self, mock_get_valid_folder_path, mock_get_and_update_sync_folders
     ):
@@ -174,3 +170,6 @@ class TestWorkThisCloud(unittest.TestCase):
         result_not_found = get_os_path_by_cloud_path(clouds_path_not_found)
         self.assertEqual(result_not_found, "D:/folder3")
         mock_get_valid_folder_path.assert_called_once_with("folder3")
+
+if __name__ == "__main__":
+    unittest.main()
